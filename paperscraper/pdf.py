@@ -1,5 +1,3 @@
-"""Functionalities to scrape PDF files of publications."""
-
 import logging
 import os
 import sys
@@ -15,6 +13,11 @@ from .utils import load_jsonl
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+# Function to create a proxy-wrapped URL using UPenn's proxy settings
+def create_proxy_url(doi: str) -> str:
+    base_openurl = "https://upenn.alma.exlibrisgroup.com/view/uresolver/01UPENN_INST/openurl?"
+    proxy_prefix = "https://proxy.library.upenn.edu/login?url="
+    return f"{proxy_prefix}{base_openurl}ctx_ver=Z39.88-2004&rft_id=info:doi/{doi}"
 
 def save_pdf(paper_metadata: Dict[str, Any], filepath: str) -> None:
     """
@@ -36,19 +39,21 @@ def save_pdf(paper_metadata: Dict[str, Any], filepath: str) -> None:
     if not Path(filepath).parent.exists():
         raise ValueError(f"The folder: {Path(filepath).parent} seems to not exist.")
 
-    url = f"https://doi.org/{paper_metadata['doi']}"
+    # Use the proxy-wrapped DOI link
+    proxy_url = create_proxy_url(paper_metadata['doi'])
+
     try:
-        response = requests.get(url, timeout=60)
+        response = requests.get(proxy_url, timeout=60)
     except Exception:
-        logger.warning(f"Could not download {url}.")
+        logger.warning(f"Could not download {proxy_url}.")
         return
 
     soup = BeautifulSoup(response.text, features="lxml")
-
     metas = soup.find("meta", {"name": "citation_pdf_url"})
+
     if metas is None:
         logger.warning(
-            f"Could not find PDF for: {url} (either there's a paywall or the host "
+            f"Could not find PDF for: {proxy_url} (either there's a paywall or the host "
             "blocks PDF scraping)."
         )
         return
